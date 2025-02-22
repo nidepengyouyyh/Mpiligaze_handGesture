@@ -16,11 +16,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import torch
+from method.extend_finger import line_from_points, point_line_distance, extend_line, does_line_intersect_box
 
 class Demo:
     QUIT_KEYS = {27, ord('q')}
 
     def __init__(self, config: DictConfig):
+        self.eye_pt0 = None
+        self.eye_pt1 = None
         self.config = config
         self.mode = 'hand'
         self.gaze_estimator = GazeEstimator(config)
@@ -84,7 +87,13 @@ class Demo:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         return filtered_detections
+
+    def get_box_center(self, x1, y1, x2, y2):
+        """ 获取YOLO框的中心点 """
+        return (x1 + x2) / 2, (y1 + y2) / 2
+
     def _run_on_video(self) -> None:
+        frame_count = 0  # 计数器，用于追踪帧的数量
 
         while True:
             if self.config.demo.display_on_screen:
@@ -93,27 +102,38 @@ class Demo:
                     break
 
             ok, frame = self.cap.read()
-            frame = cv2.resize(frame, (640, 480))
 
-            filtered_detections = self.yolo_detect(frame)
-
+            # 确保每次读取到有效的帧
             if not ok:
                 break
 
-            if self.mode == 'hand':
-                self.visualizer.image = self.gesture_detector.process_frame(frame, filtered_detections)
+            # 调整帧的大小
+            frame_resized = cv2.resize(frame, (640, 480))
 
-            elif self.mode == 'eye':
-                self._process_image(frame)
+            # 提速
+            if frame_count % 2 == 0:
+                # YOLO物体检测
+                filtered_detections = self.yolo_detect(frame_resized)
 
+                if self.mode == 'hand':
+                    # 处理手势识别
+                    self.visualizer.image = self.gesture_detector.process_frame(frame_resized, filtered_detections)
+                elif self.mode == 'eye':
+                    # 处理眼部注视方向等
+                    self._process_image(frame_resized, filtered_detections)
 
+            # 增加计数器，直到达到2重新开始
+            frame_count += 1
+
+            # 显示处理后的图像
             if self.config.demo.display_on_screen:
                 cv2.imshow('frame', self.visualizer.image)
+
         self.cap.release()
         if self.writer:
             self.writer.release()
 
-    def _process_image(self, image) -> None:
+    def _process_image(self, image, filtered_detections) -> None:
         undistorted = cv2.undistort(
             image, self.gaze_estimator.camera.camera_matrix,
             self.gaze_estimator.camera.dist_coefficients)
@@ -128,6 +148,22 @@ class Demo:
             self._draw_face_template_model(face)
             self._draw_gaze_vector(face)
             self._display_normalized_image(face)
+
+        # 判断食指直线是否穿过物体框，并计算最短距离
+        line_3d = line_from_points(self.eye_pt0, self.eye_pt1)
+
+        for detection in filtered_detections:
+            box_x1, box_y1, box_x2, box_y2, _, _ = detection
+            box_center = self.get_box_center(box_x1, box_y1, box_x2, box_y2)
+
+            min_distance = point_line_distance(line_3d, box_center)
+            print(min_distance)
+            if min_distance < 100:  # 设置一个阈值来判断是否足够接近
+                if does_line_intersect_box((self.eye_pt0, self.eye_pt1), (box_x1, box_y1, box_x2, box_y2)):
+                    print("用户在看物体:", self.object_model.names[int(detection[5])])
+                else:
+                    print("未穿过物体框")
+
 
         if self.config.demo.use_camera:
             self.visualizer.image = self.visualizer.image[:, ::-1]
@@ -268,9 +304,10 @@ class Demo:
                 logger.info(
                     f'[{key.name.lower()}] pitch: {pitch:.2f}, yaw: {yaw:.2f}')
         elif self.config.mode in ['MPIIFaceGaze', 'ETH-XGaze']:
-            self.visualizer.draw_3d_line(
-                face.center, face.center + length * face.gaze_vector)
+            self.eye_pt0, self.eye_pt1 = self.visualizer.draw_3d_line(
+                face.center, face.center + length * face.gaze_vector * 8)
             pitch, yaw = np.rad2deg(face.vector_to_angle(face.gaze_vector))
             logger.info(f'[face] pitch: {pitch:.2f}, yaw: {yaw:.2f}')
+
         else:
             raise ValueError

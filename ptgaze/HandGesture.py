@@ -126,14 +126,13 @@ class GestureObjectDetection:
                     # 判断食指直线是否穿过物体框，并计算最短距离
                     for detection in filtered_detections:
                         box_x1, box_y1, box_x2, box_y2, _, _ = detection
-                        box_center = self.get_box_center(x1, y1, x2, y2)
+                        box_center = self.get_box_center(box_x1, box_y1, box_x2, box_y2)
 
                         min_distance = point_line_distance(line, box_center)
                         print(min_distance)
                         line2 = ((x1, y1), (x2, y2))
-                        if min_distance < 0.8:  # 设置一个阈值来判断是否足够接近
+                        if min_distance < 150:  # 设置一个阈值来判断是否足够接近
                             if does_line_intersect_box(line2, (box_x1, box_y1, box_x2, box_y2)):
-                                print("穿过了矩形框")
                                 print("食指指向了物体:", self.model.names[int(detection[5])])
                             else:
                                 print("未穿过物体框")

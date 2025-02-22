@@ -27,9 +27,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--mode',
         type=str,
+        default='eth-xgaze',
         choices=['mpiigaze', 'mpiifacegaze', 'eth-xgaze'],
         help='With \'mpiigaze\', MPIIGaze model will be used. '
-        'With \'mpiifacegaze\', MPIIFaceGaze model will be used. '
+        'With \'mpiif'
+             'acegaze\', MPIIFaceGaze model will be used. '
         'With \'eth-xgaze\', ETH-XGaze model will be used.')
     parser.add_argument(
         '--face-detector',
@@ -154,5 +156,6 @@ def main():
 
     demo = Demo(config)
     demo.run()
+
 
 main()

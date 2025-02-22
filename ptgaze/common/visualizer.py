@@ -55,7 +55,7 @@ class Visualizer:
                      point0: np.ndarray,
                      point1: np.ndarray,
                      color: Tuple[int, int, int] = (255, 255, 0),
-                     lw=1) -> None:
+                     lw: object = 1) -> None:
         assert self.image is not None
         assert point0.shape == point1.shape == (3, )
         points3d = np.vstack([point0, point1])
@@ -64,6 +64,7 @@ class Visualizer:
         pt1 = self._convert_pt(points2d[1])
         cv2.line(self.image, pt0, pt1, color, lw, cv2.LINE_AA)
 
+        return pt0, pt1
     def draw_model_axes(self, face: Face, length: float, lw: int = 2) -> None:
         assert self.image is not None
         assert face is not None
